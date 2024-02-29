@@ -1,52 +1,50 @@
-const ENCRYPTION_ALGORITHM = 'AES-CTR'
+import forge from 'node-forge'
 
-export const getCryptoKey = async (key = 'symphony_of_babel_uuid_key') => {
+const ENCRYPTION_ALGORITHM = 'AES-CBC'
+
+const stringToUint8Array = (s: string) => {
+	const arr = []
+	for (const char of s) {
+		arr.push(char.charCodeAt(0))
+	}
+	return new Uint8Array(arr)
+}
+
+export const getCryptoKey = (key = 'symphony_of_babel_uuid_key'): Uint8Array => {
 	if (!key) {
 		// Generate random key
-		return crypto.subtle.generateKey({ name: ENCRYPTION_ALGORITHM, length: 256 }, true, ['encrypt', 'decrypt'])
+		const randomKey = forge.random.getBytesSync(32)
+		return stringToUint8Array(randomKey)
 	}
 
 	const keyData = asciiStringToArrayBufferAndPad(key)
-	return crypto.subtle.importKey(
-		'raw',
-		keyData,
-		{
-			name: ENCRYPTION_ALGORITHM,
-			length: 256,
-		},
-		true,
-		['encrypt', 'decrypt']
-	)
+	return new Uint8Array(keyData)
 }
 
 const ZERO_IV = new Uint8Array(16)
 
-export const encryptBuffer = async (buffer: Uint8Array, key: CryptoKey) => {
-	const encryptedData = await crypto.subtle.encrypt(
-		{
-			name: ENCRYPTION_ALGORITHM,
-			counter: ZERO_IV,
-			length: 64,
-		},
-		key,
-		buffer
-	)
+export const encryptBuffer = (buffer: Uint8Array, key: Uint8Array) => {
+	const keyBuffer = forge.util.createBuffer(key)
+	const cipher = forge.cipher.createCipher('AES-CBC', keyBuffer)
+	cipher.start({
+		iv: forge.util.createBuffer(ZERO_IV),
+	})
+	cipher.update(forge.util.createBuffer(buffer))
+	cipher.finish()
 
-	return new Uint8Array(encryptedData)
+	return stringToUint8Array(forge.util.createBuffer(cipher.output).getBytes())
 }
 
-export const decryptBuffer = async (encryptedData: Uint8Array, key: CryptoKey) => {
-	const decryptedData = await crypto.subtle.decrypt(
-		{
-			name: ENCRYPTION_ALGORITHM,
-			counter: ZERO_IV,
-			length: 64,
-		},
-		key,
-		encryptedData
-	)
+export const decryptBuffer = (encryptedData: Uint8Array, key: Uint8Array) => {
+	const keyBuffer = forge.util.createBuffer(key)
+	const decipher = forge.cipher.createDecipher('AES-CBC', keyBuffer)
+	decipher.start({
+		iv: forge.util.createBuffer(ZERO_IV),
+	})
+	decipher.update(forge.util.createBuffer(encryptedData))
+	decipher.finish()
 
-	return new Uint8Array(decryptedData)
+	return stringToUint8Array(forge.util.createBuffer(decipher.output).getBytes())
 }
 
 const asciiStringToArrayBufferAndPad = (str: string, numBytes = 32) => {
@@ -55,4 +53,20 @@ const asciiStringToArrayBufferAndPad = (str: string, numBytes = 32) => {
 		bytes[i] = str.charCodeAt(i)
 	}
 	return bytes.buffer
+}
+
+export const getUUIDFromWAVData = (wavData: Uint8Array, key: Uint8Array) => {
+	return decryptBuffer(wavData, key)
+}
+
+export const getWAVDataFromUUID = (uuid: Uint8Array, key: Uint8Array) => {
+	return encryptBuffer(uuid, key)
+}
+
+export const getUUIDFromURL = (url: Uint8Array, key: Uint8Array) => {
+	return decryptBuffer(url, key)
+}
+
+export const getURLFromUUID = (uuid: Uint8Array, key: Uint8Array) => {
+	return encryptBuffer(uuid, key)
 }

@@ -1,5 +1,6 @@
 import { WaveFile } from 'wavefile'
 import { uint8arrayToBase64 } from './bufferUtils'
+import { map } from './mathUtils'
 
 export const SAMPLE_RATE = 32000
 export const BIT_DEPTH = '8'
@@ -12,16 +13,7 @@ export const createRandomWAV = (
 	numChannels = NUM_CHANNELS,
 	durationSeconds = DURATION_SECONDS
 ) => {
-	const numSamples = sampleRate * durationSeconds
-
-	let samples = new Uint8Array(numSamples)
-
-	for (let i = 0; i < numSamples; i++) {
-		// Generate a random 8-bit sample (between 0 and 255)
-		samples[i] = Math.floor(Math.random() * 256)
-	}
-
-	return createWAVFromSamples(samples, sampleRate, bitDepth, numChannels)
+	return createWAVFromSamples(generateRandomWAVData(sampleRate, durationSeconds), sampleRate, bitDepth, numChannels)
 }
 
 export const createWAVFromSamples = (
@@ -39,6 +31,29 @@ export const createWAVFromSamples = (
 export const getRandomWAVB64 = () => {
 	const wavBuffer = createRandomWAV()
 	return uint8arrayToBase64(wavBuffer)
+}
+
+export const generateWavHeader = (
+	sampleRate = SAMPLE_RATE,
+	bitDepth = BIT_DEPTH,
+	numChannels = NUM_CHANNELS,
+	durationSeconds = DURATION_SECONDS
+) => {
+	const numSamples = sampleRate * durationSeconds
+	const samples = new Uint8Array(numSamples)
+	const wav = createWAVFromSamples(samples, sampleRate, bitDepth, numChannels)
+	return getWavHeader(wav)
+}
+
+export const generateRandomWAVData = (sampleRate = SAMPLE_RATE, durationSeconds = DURATION_SECONDS) => {
+	const numSamples = sampleRate * durationSeconds
+	const samples = new Uint8Array(numSamples)
+
+	for (let i = 0; i < numSamples; i++) {
+		samples[i] = Math.floor(Math.random() * 256)
+	}
+
+	return samples
 }
 
 // This makes an assumption that a WAV's header is always 44 bytes.
@@ -121,4 +136,16 @@ export const convertAudioBufferToWavefile = (audioBuffer: AudioBuffer) => {
 	wav.toBitDepth(BIT_DEPTH)
 
 	return wav.toBuffer()
+}
+
+export const calculateRMS = (buffer: Uint8Array) => {
+	const squaredSum = buffer.reduce((sum, sample) => sum + sample * sample, 0)
+	const meanSquare = squaredSum / buffer.length
+	return Math.sqrt(meanSquare)
+}
+
+const PEAK_RMS = 148
+const MIN_RMS = 100
+export const scaleVolumeToRMS = (volume: number, rms: number) => {
+	return volume / map(rms, MIN_RMS, PEAK_RMS, 0, 1)
 }

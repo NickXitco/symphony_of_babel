@@ -1,98 +1,85 @@
-import { Action, createSlice, Dispatch } from '@reduxjs/toolkit'
-import { decryptBuffer, encryptBuffer, getCryptoKey } from '@/utils/encryptionUtils'
-import { base64ToUint8array, uint8arrayToBase64 } from '@/utils/bufferUtils'
-import { getURL } from '@/utils/idUtils'
-import { createWAVFromSamples } from '@/utils/wavUtils'
+import { Action, createSlice, PayloadAction } from '@reduxjs/toolkit'
+import { generateRandomWAVData } from '../../utils/wavUtils'
+import { getCryptoKey, getUUIDFromWAVData, getWAVDataFromUUID } from '../../utils/encryptionUtils'
+import { base64ToUint8array, uint8arrayToBase64 } from '../../utils/bufferUtils'
+import { getURLStub } from '../../utils/idUtils'
+import { RootState } from '../index'
 
-export const setWavData = (payload: string) => async (dispatch: Dispatch<Action>) => {
-	dispatch({ type: 'audio/setWavDataStart' })
-
-	try {
-		const cryptoKey = await getCryptoKey()
-		const encrypted = await encryptBuffer(base64ToUint8array(payload), cryptoKey)
-		const uuid = uint8arrayToBase64(encrypted)
-		const url = await getURL(encrypted)
-
-		dispatch({
-			type: 'audio/setWavDataSuccess',
-			payload: {
-				wavB64: payload,
-				uuid,
-				url,
-			},
-		})
-	} catch (e) {
-		dispatch({ type: 'audio/setWavDataFailure', payload: e })
-	}
+interface WavData {
+	wavDataB64: string
+	uuid: string
+	url: string
 }
 
-export const setUUID = (payload: string) => async (dispatch: Dispatch<Action>) => {
-	dispatch({ type: 'audio/setUUIDStart' })
+interface VolumeData {
+	volume: number
+}
 
-	try {
-		const cryptoKey = await getCryptoKey()
-		const decrypted = await decryptBuffer(base64ToUint8array(payload), cryptoKey)
+interface AudioState extends WavData {
+	volume: number
+	processing: boolean
+	error: any
+}
 
-		const wav = createWAVFromSamples(decrypted)
-		const wavB64 = uint8arrayToBase64(wav)
-		const url = await getURL(base64ToUint8array(payload))
+const wavData = generateRandomWAVData()
+const uuidBuffer = getUUIDFromWAVData(wavData, getCryptoKey())
+const urlStub = getURLStub(uuidBuffer)
 
-		dispatch({
-			type: 'audio/setUUIDSuccess',
-			payload: {
-				wavB64,
-				uuid: payload,
-				url,
-			},
-		})
-	} catch (e) {
-		dispatch({ type: 'audio/setUUIDFailure', payload: e })
-	}
+const initialState: AudioState = {
+	wavDataB64: uint8arrayToBase64(wavData),
+	uuid: uint8arrayToBase64(uuidBuffer),
+	url: urlStub,
+	volume: 0.01,
+	processing: false,
+	error: null,
 }
 
 const audioSlice = createSlice({
 	name: 'audio',
-	initialState: {
-		wavB64: '',
-		uuid: '',
-		url: '',
-		volume: 0.1,
-		processing: false,
-		error: null,
-	},
+	initialState,
 	reducers: {
-		setWavDataStart: (state) => {
-			state.processing = true
-			state.error = null
-		},
-		setWavDataSuccess: (state, action) => {
-			return {
-				...state,
-				...action.payload,
-				processing: false,
-			}
-		},
-		setWavDataFailure: (state, action) => {
+		setWavData: (state, action: PayloadAction<WavData>) => {
 			state.processing = false
-			state.error = action.payload
-		},
-
-		setUUIDStart: (state) => {
-			state.processing = true
 			state.error = null
+			state.wavDataB64 = action.payload.wavDataB64
+			state.uuid = action.payload.uuid
+			state.url = action.payload.url
 		},
-		setUUIDSuccess: (state, action) => {
-			return {
-				...state,
-				...action.payload,
-				processing: false,
-			}
-		},
-		setUUIDFailure: (state, action) => {
+		setUUID: (state, action: PayloadAction<WavData>) => {
 			state.processing = false
-			state.error = action.payload
+			state.error = null
+			state.wavDataB64 = action.payload.wavDataB64
+			state.uuid = action.payload.uuid
+			state.url = action.payload.url
+		},
+		setVolume: (state, action: PayloadAction<VolumeData>) => {
+			state.volume = action.payload.volume
 		},
 	},
 })
+
+export const setWavData = (wavB64: string): Action => {
+	const uuid = getUUIDFromWAVData(base64ToUint8array(wavB64), getCryptoKey())
+	const uuidB64 = uint8arrayToBase64(uuid)
+	const url = getURLStub(uuid)
+	return audioSlice.actions.setWavData({ wavDataB64: wavB64, uuid: uuidB64, url })
+}
+
+export const setUUID = (uuidB64: string): Action => {
+	const uuidBuffer = base64ToUint8array(uuidB64)
+	const wavData = getWAVDataFromUUID(uuidBuffer, getCryptoKey())
+	const wavB64 = uint8arrayToBase64(wavData)
+	const url = getURLStub(uuidBuffer)
+	return audioSlice.actions.setUUID({ wavDataB64: wavB64, uuid: uuidB64, url })
+}
+
+export const setVolume = (volume: number) => {
+	return audioSlice.actions.setVolume({ volume })
+}
+
+export const selectWavData = (state: RootState) => state.audioReducer.wavDataB64
+export const selectUUID = (state: RootState) => state.audioReducer.uuid
+export const selectURL = (state: RootState) => state.audioReducer.url
+export const selectVolume = (state: RootState) => state.audioReducer.volume
 
 export default audioSlice.reducer

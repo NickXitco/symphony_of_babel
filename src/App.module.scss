@@ -1,0 +1,118 @@
+
+.container {
+	height: 100vh;
+
+	--color1: hsla(169, 100%, 24%, 0.1);
+	--color2: hsla(169, 93%, 53%, 0.1);
+	--color3: hsla(238, 72%, 30%, 1);
+	--color4: hsla(230, 10%, 24%, 1);
+
+
+	background: linear-gradient(167deg, var(--color1) 17.91%, var(--color2) 90.72%), radial-gradient(114.99% 82.34% at 88.96% 12.89%, var(--color3) 0%, var(--color4) 100%);
+	color: white;
+
+	padding: 7.5rem;
+
+	overflow: hidden;
+
+	transition: all 0.5s ease-in-out;
+}
+
+.header {
+	h2 {
+		font-size: 2rem;
+		font-weight: bold;
+		margin-bottom: 0.5rem;
+	}
+
+	p {
+		font-family: 'PierSans', sans-serif;
+		font-size: 1rem;
+		font-weight: 400;
+		letter-spacing: 0.05rem;
+		opacity: 0.8;
+	}
+}
+
+.top_container {
+	display: flex;
+	justify-content: space-between;
+}
+
+
+.visualization {
+	min-height: 40rem;
+	position: relative;
+
+	margin: 5rem auto;
+
+	canvas {
+		position: absolute;
+		inset: 0;
+		width: 100%;
+		height: 100%;
+	}
+}
+
+.controls {
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	align-items: center;
+
+	gap: 2rem;
+}
+
+.top_shelf {
+	display: flex;
+
+	align-items: center;
+	gap: 2rem;
+
+	button {
+		background: none;
+		border: none;
+
+		color: white;
+
+		font: inherit;
+
+		font-size: 1rem;
+
+
+		cursor: pointer;
+
+
+	}
+}
+
+.bottom_shelf {
+	display: flex;
+
+	align-items: center;
+	gap: 2rem;
+
+	label,
+	button {
+		background: none;
+		border: 1px solid #FFF;
+
+		color: white;
+
+		font: inherit;
+
+		font-size: 1rem;
+
+		padding: 0.5rem 1rem;
+		border-radius: 0.5rem;
+
+		cursor: pointer;
+
+
+		&:hover {
+			background: rgba(255, 255, 255, 0.3);
+		}
+
+
+	}
+}

@@ -1,45 +1,56 @@
-import React, { useEffect } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Howl } from 'howler'
-import { base64ToUint8array, getBase64Preview, incrementBase64, uint8arrayToBase64 } from './utils/bufferUtils'
-import { encryptBuffer, getCryptoKey } from './utils/encryptionUtils'
-import { getURL } from './utils/idUtils'
 import {
-	BIT_DEPTH,
-	DURATION_SECONDS,
+	base64ToUint8array,
+	decrementBase64,
+	getEntropy,
+	incrementBase64,
+	maxBuffer,
+	minBuffer,
+	uint8arrayToBase64,
+} from './utils/bufferUtils'
+import {
+	audioBufferToMono,
+	calculateRMS,
+	convertAudioBufferToWavefile,
+	create10SecondClip,
+	createWAVFromSamples,
+	generateRandomWAVData,
 	getRandomWAVB64,
 	getWavData,
-	audioBufferToMono,
 	readFileAsArrayBuffer,
-	SAMPLE_RATE,
-	create10SecondClip,
-	convertAudioBufferToWavefile,
+	scaleVolumeToRMS,
 } from './utils/wavUtils'
-import { WaveFile } from 'wavefile'
+import { useDispatch, useSelector } from 'react-redux'
+import {
+	selectURL,
+	selectUUID,
+	selectVolume,
+	selectWavData,
+	setUUID,
+	setVolume,
+	setWavData,
+} from './reducers/audio/audioSlice'
+import { AppDispatch, RootState } from './reducers'
+import styles from './App.module.scss'
+import { i } from 'vitest/dist/reporters-1evA5lom'
+import { calculateSpectrogram } from './utils/fftUtils'
+import { drawVisualization } from './utils/visualizationUtils'
+import { getName } from './utils/nameUtils'
+import { getRandomColorPalette } from './utils/colorUtils'
 
 const App = () => {
-	const [wavB64, setWavB64] = React.useState('')
-	const [encryptedWavB64, setEncryptedWavB64] = React.useState('')
-	const [url, setURL] = React.useState('')
-	const [volume, setVolume] = React.useState(0.1)
+	const dispatch = useDispatch<AppDispatch>()
+	const wavB64 = useSelector(selectWavData)
+	const uuid = useSelector(selectUUID)
+	const url = useSelector(selectURL)
+	const volume = useSelector(selectVolume)
 
-	const fileInputRef = React.useRef<HTMLInputElement>(null)
+	const [playing, setPlaying] = useState(false)
 
-	useEffect(() => {
-		const wavData = getWavData(base64ToUint8array(wavB64))
-
-		getCryptoKey().then((key) => {
-			encryptBuffer(wavData, key).then((res) => {
-				setEncryptedWavB64(uint8arrayToBase64(res))
-			})
-		})
-	}, [wavB64])
-
-	useEffect(() => {
-		const encryptedBuffer = base64ToUint8array(encryptedWavB64)
-		getURL(encryptedBuffer).then((res) => {
-			setURL(res)
-		})
-	}, [encryptedWavB64])
+	const fileInputRef = useRef<HTMLInputElement>(null)
+	const canvasContainerRef = useRef<HTMLDivElement>(null)
+	const canvasRef = useRef<HTMLCanvasElement>(null)
 
 	const processAudio = async (): Promise<void> => {
 		const file = fileInputRef.current?.files?.[0]
@@ -54,67 +65,152 @@ const App = () => {
 			const monoAudioBuffer = audioBufferToMono(audioContext, clippedAudioBuffer)
 			const wavefile = convertAudioBufferToWavefile(monoAudioBuffer)
 
-			setWavB64(uint8arrayToBase64(wavefile))
+			const payload = uint8arrayToBase64(getWavData(wavefile))
+
+			dispatch(setWavData(payload))
 		} catch (error) {
 			console.error('Error processing audio:', error)
 		}
 	}
 
+	const sound = useMemo(() => {
+		const wavFile = createWAVFromSamples(base64ToUint8array(wavB64))
+
+		const sound = new Howl({
+			src: ['data:audio/wav;base64,' + uint8arrayToBase64(wavFile)],
+			format: ['wav'],
+			volume: scaleVolumeToRMS(volume, calculateRMS(base64ToUint8array(wavB64))),
+		})
+
+		sound.on('end', () => {
+			setPlaying(false)
+		})
+		return sound
+	}, [wavB64])
+
+	const handleResize = () => {
+		drawVisualization('spectrogram', base64ToUint8array(wavB64), canvasRef.current, canvasContainerRef.current)
+	}
+
+	useEffect(() => {
+		window.addEventListener('resize', handleResize)
+		return () => {
+			window.removeEventListener('resize', handleResize)
+		}
+	}, [])
+
+	useEffect(() => {
+		sound.volume(scaleVolumeToRMS(volume, calculateRMS(base64ToUint8array(wavB64))))
+	}, [volume])
+
+	useEffect(() => {
+		if (!canvasRef.current) return
+
+		drawVisualization('spectrogram', base64ToUint8array(wavB64), canvasRef.current, canvasContainerRef.current)
+	}, [wavB64])
+
+	const colorPalette = getRandomColorPalette(url)
+
 	return (
-		<div className="App">
-			<button
-				onClick={async () => {
-					setWavB64(getRandomWAVB64())
-				}}
-			>
-				Generate Sound
-			</button>
-
-			<button
-				onClick={() => {
-					setEncryptedWavB64(incrementBase64(encryptedWavB64))
-				}}
-			>
-				Increment UUID
-			</button>
-
-			<p>WAV: {getBase64Preview(wavB64)}</p>
-			<p>UUID: {getBase64Preview(encryptedWavB64)}</p>
-			<p>URL: {url}</p>
-
-			<button
-				onClick={() => {
-					// Play the generated sound
-					const sound = new Howl({
-						src: ['data:audio/wav;base64,' + wavB64],
-						format: ['wav'],
-						volume: volume,
-					})
-
-					sound.play()
-				}}
-			>
-				Play Generated Sound
-			</button>
-
-			<input
-				type={'range'}
-				min={0}
-				max={1}
-				step={0.01}
-				value={volume}
-				onChange={(e) => {
-					setVolume(parseFloat(e.target.value))
-				}}
-			/>
-
-			<div>
-				<input type="file" ref={fileInputRef} accept="audio/*" />
-				<button onClick={processAudio}>Upload and Process</button>
+		<div
+			className={styles.container}
+			style={
+				{
+					'--color1': colorPalette.color1,
+					'--color2': colorPalette.color2,
+					'--color3': colorPalette.color3,
+					'--color4': colorPalette.color4,
+				} as any
+			}
+		>
+			<div className={styles.top_container}>
+				<header className={styles.header}>
+					<h2>{getName(url)}</h2>
+					<p>{uuid.slice(0, 20)}...</p>
+					<p>Entropy: {getEntropy(base64ToUint8array(wavB64)).toFixed(4)} (~8 is Random)</p>
+				</header>
+				<input
+					type={'range'}
+					min={0}
+					max={0.25}
+					step={0.01}
+					value={volume}
+					onChange={(e) => {
+						dispatch(setVolume(parseFloat(e.target.value)))
+					}}
+				/>
 			</div>
 
-			<p>Bit rate: {BIT_DEPTH}</p>
-			<p>Sample rate: {SAMPLE_RATE}</p>
+			<div className={styles.visualization} ref={canvasContainerRef}>
+				<canvas ref={canvasRef} />
+			</div>
+
+			<div className={styles.controls}>
+				<div className={styles.top_shelf}>
+					<button
+						onClick={() => {
+							dispatch(setUUID(decrementBase64(uuid)))
+						}}
+					>
+						{'<'}
+					</button>
+					<button
+						onClick={() => {
+							if (playing) {
+								sound.stop()
+								setPlaying(false)
+							} else {
+								sound.play()
+								setPlaying(true)
+							}
+						}}
+					>
+						{playing ? '▨' : '▷'}
+					</button>
+					<button
+						onClick={() => {
+							dispatch(setUUID(incrementBase64(uuid)))
+						}}
+					>
+						{'>'}
+					</button>
+				</div>
+				<div className={styles.bottom_shelf}>
+					<input
+						type="file"
+						ref={fileInputRef}
+						accept="audio/*"
+						onChange={processAudio}
+						className={'vh'}
+						id={'fileInput'}
+					/>
+					<label htmlFor={'fileInput'}>find recording</label>
+
+					<button
+						onClick={async () => {
+							dispatch(setWavData(uint8arrayToBase64(generateRandomWAVData())))
+						}}
+					>
+						random recording
+					</button>
+
+					<button
+						onClick={async () => {
+							const wavDataBuffer = base64ToUint8array(wavB64)
+							const wavFile = createWAVFromSamples(wavDataBuffer)
+
+							const wavBlob = new Blob([wavFile], { type: 'audio/wav' })
+							const wavURL = window.URL.createObjectURL(wavBlob)
+							const link = document.createElement('a')
+							link.href = wavURL
+							link.download = 'recording.wav'
+							link.click()
+						}}
+					>
+						download recording
+					</button>
+				</div>
+			</div>
 		</div>
 	)
 }

@@ -1,30 +1,29 @@
-import { expect, test, describe, it, beforeEach } from 'vitest'
-import { getURL } from '@/utils/idUtils'
-import { createRandomWAV } from '@/utils/wavUtils'
-import { encryptBuffer, getCryptoKey } from '@/utils/encryptionUtils'
-import { uint8arrayToBase64 } from '@/utils/bufferUtils'
+import { beforeEach, describe, expect, it } from 'vitest'
+import { createRandomWAV, generateRandomWAVData } from '../utils/wavUtils'
+import { getCryptoKey, getUUIDFromWAVData } from '../utils/encryptionUtils'
+import { getURLStub } from '../utils/idUtils'
 
 describe('ID Generation', () => {
-	let buffer: Uint8Array
-	let uuidKey: CryptoKey
-	let encryptedBuffer: Uint8Array
+	let randomWavData: Uint8Array
+	let cryptoKey: Uint8Array
+	let UUID: Uint8Array
 
 	beforeEach(async () => {
-		buffer = createRandomWAV()
-		uuidKey = await getCryptoKey()
-		encryptedBuffer = await encryptBuffer(buffer, uuidKey)
+		randomWavData = generateRandomWAVData()
+		cryptoKey = getCryptoKey()
+		UUID = getUUIDFromWAVData(randomWavData, cryptoKey)
 	})
 
 	it('should generate the same ID for the same data', async () => {
-		const url1 = await getURL(encryptedBuffer)
-		const url2 = await getURL(encryptedBuffer)
+		const url1 = getURLStub(UUID)
+		const url2 = getURLStub(UUID)
 
 		expect(url1).toEqual(url2)
 	})
 
 	it('should generate a unique ID for different data', async () => {
-		const url1 = await getURL(encryptedBuffer)
-		const url2 = await getURL(createRandomWAV())
+		const url1 = getURLStub(UUID)
+		const url2 = getURLStub(createRandomWAV())
 
 		expect(url1).not.toEqual(url2)
 	})

@@ -1,20 +1,27 @@
-import { expect, test, describe, it, beforeEach } from 'vitest'
-import { createRandomWAV, getWavHeader } from '@/utils/wavUtils'
-import { decryptBuffer, encryptBuffer, getCryptoKey } from '@/utils/encryptionUtils'
-import { base64ToUint8array, getEntropy, incrementBase64, uint8arrayToBase64 } from '@/utils/bufferUtils'
+import { beforeEach, describe, expect, it } from 'vitest'
+
 import { WaveFile } from 'wavefile'
+import { generateRandomWAVData, generateWavHeader } from '../utils/wavUtils'
+import {
+	decryptBuffer,
+	encryptBuffer,
+	getCryptoKey,
+	getUUIDFromWAVData,
+	getWAVDataFromUUID,
+} from '../utils/encryptionUtils'
+import { incrementBuffer, uint8arrayToBase64 } from '../utils/bufferUtils'
 
 describe('Encryption', () => {
 	let buffer: Uint8Array
-	let uuidKey: CryptoKey
+	let uuidKey: Uint8Array
 
 	beforeEach(async () => {
-		buffer = createRandomWAV()
-		uuidKey = await getCryptoKey()
+		buffer = generateRandomWAVData()
+		uuidKey = getCryptoKey('')
 	})
 
 	it('should encrypt to different data', async () => {
-		const ciphertextBuffer = await encryptBuffer(buffer, uuidKey)
+		const ciphertextBuffer = encryptBuffer(buffer, uuidKey)
 		const ciphertext = uint8arrayToBase64(ciphertextBuffer)
 		const bufferBase64 = uint8arrayToBase64(buffer)
 
@@ -22,30 +29,32 @@ describe('Encryption', () => {
 	})
 
 	it('should decrypt to the original data', async () => {
-		const ciphertextBuffer = await encryptBuffer(buffer, uuidKey)
-		const plaintextBuffer = await decryptBuffer(ciphertextBuffer, uuidKey)
+		const ciphertextBuffer = encryptBuffer(buffer, uuidKey)
+		const plaintextBuffer = decryptBuffer(ciphertextBuffer, uuidKey)
 
 		expect(buffer).toEqual(plaintextBuffer)
 	})
 
+	it('should encrypt to substantially different data from two similar plain texts', async () => {
+		const ciphertextA = encryptBuffer(buffer, uuidKey)
+		const ciphertextB = encryptBuffer(incrementBuffer(buffer), uuidKey)
+
+		expect(ciphertextA[0]).not.toEqual(ciphertextB[0])
+	})
+
 	it('should create a valid WAV file when incrementing ciphertext', async () => {
-		buffer = new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8])
-		const ciphertextBuffer = await encryptBuffer(buffer, uuidKey)
-		const ciphertextBase64 = uint8arrayToBase64(ciphertextBuffer)
-		const incremented = incrementBase64(ciphertextBase64)
-		const incrementedBuffer = base64ToUint8array(incremented)
+		const randomWAVData = generateRandomWAVData()
+		const UUID = getUUIDFromWAVData(randomWAVData, uuidKey)
+		const UUIDIncremented = incrementBuffer(UUID)
 
-		const plaintextBuffer = await decryptBuffer(incrementedBuffer, uuidKey)
+		const newWavData = getWAVDataFromUUID(UUIDIncremented, uuidKey)
 
-		const newWav = createRandomWAV()
-		const header = getWavHeader(newWav)
+		const header = generateWavHeader()
+		const newWavDataWithHeader = new Uint8Array(newWavData.length + header.length)
+		newWavDataWithHeader.set(header)
+		newWavDataWithHeader.set(newWavData, header.length)
 
-		// append wav header onto plaintextBuffer
-		const plaintextBufferWithHeader = new Uint8Array(plaintextBuffer.length + header.length)
-		plaintextBufferWithHeader.set(header)
-		plaintextBufferWithHeader.set(plaintextBuffer, header.length)
-
-		const waveFile = new WaveFile(plaintextBufferWithHeader)
+		const waveFile = new WaveFile(newWavDataWithHeader)
 
 		expect(waveFile.format).toEqual('WAVE')
 	})

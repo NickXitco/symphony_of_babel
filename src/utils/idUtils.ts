@@ -1,8 +1,8 @@
-import { encryptBuffer, getCryptoKey } from './encryptionUtils'
+import { getCryptoKey, getURLFromUUID } from './encryptionUtils'
 import { uint8arrayToBase64 } from './bufferUtils'
 
-export const getURL = async (uuidBuffer: Uint8Array) => {
-	const key = await getCryptoKey('TODO_SECRET_SERVER_KEY')
-	const encryptedData = await encryptBuffer(uuidBuffer, key)
-	return uint8arrayToBase64(new Uint8Array(encryptedData)).slice(0, 100)
+export const getURLStub = (uuidBuffer: Uint8Array) => {
+	const key = getCryptoKey('TODO_SECRET_SERVER_KEY')
+	const urlFull = getURLFromUUID(uuidBuffer, key)
+	return uint8arrayToBase64(urlFull).slice(0, 100)
 }

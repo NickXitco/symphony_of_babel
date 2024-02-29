@@ -1,6 +1,6 @@
-import { expect, test, describe, it, beforeEach } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 import { WaveFile } from 'wavefile'
-import { createRandomWAV } from '@/utils/wavUtils'
+import { createRandomWAV } from '../utils/wavUtils'
 
 describe('Audio Creation', () => {
 	let buffer: Uint8Array
